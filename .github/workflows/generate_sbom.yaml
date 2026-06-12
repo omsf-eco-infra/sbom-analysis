@@ -24,7 +24,7 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          path: .pixi/envs/openfe
+          path: .pixi/envs/${{ matrix.environment }}
           config: syft.yaml
           upload-release-assets: false
           id: ${{ matrix.environment }}
