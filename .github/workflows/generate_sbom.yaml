@@ -19,5 +19,5 @@ jobs:
         uses: anchore/sbom-action@v0
         with:
           path: .pixi/envs/openfe
-          config: syft-config.json
+          config: syft.yaml
           upload-release-assets: false
