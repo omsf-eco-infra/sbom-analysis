@@ -11,6 +11,12 @@ version = "0.1.0"
 
 [environments]
 openfe = {features = ["openfe"]}
+openff = {features = ["openff"]}
 
 [feature.openfe.dependencies]
-openfe = ">=1.11.1,<2"
+openfe = "==1.11.1"
+
+[feature.openff.dependencies]
+openff-toolkit = "==0.18.1"
+
+
