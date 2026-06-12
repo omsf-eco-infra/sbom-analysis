@@ -1,0 +1,16 @@
+[workspace]
+authors = ["Ethan Holz <ethan.holz@omsf.io>"]
+channels = ["conda-forge"]
+name = "sbom-analysis"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+
+[environments]
+openfe = {features = ["openfe"]}
+
+[feature.openfe.dependencies]
+openfe = ">=1.11.1,<2"

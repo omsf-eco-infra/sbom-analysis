@@ -1,0 +1,3 @@
+select-catalogers:
+  - "+conda-meta-cataloger"
+  - "+cargo-auditable-binary-cataloger"

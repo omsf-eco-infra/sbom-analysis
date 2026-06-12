@@ -1,0 +1,22 @@
+name: Generate SBOM
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  generate:
+    name: Generate Jobs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Pixi
+        uses: prefix-dev/setup-pixi@v0.9.6
+      - name: Install envs
+        run: pixi install --all
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .pixi/envs/openfe
+          config: syft-config.json
+          upload-release-assets: false
