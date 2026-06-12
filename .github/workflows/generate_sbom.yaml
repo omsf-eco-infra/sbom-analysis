@@ -12,8 +12,8 @@ jobs:
     steps:
       - name: Install Pixi
         uses: prefix-dev/setup-pixi@v0.9.6
-      - name: Install envs
-        run: pixi install --all
+        with:
+          environments: openfe
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
