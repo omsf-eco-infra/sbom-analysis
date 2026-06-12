@@ -27,4 +27,4 @@ jobs:
           path: .pixi/envs/${{ matrix.environment }}
           config: syft.yaml
           upload-release-assets: false
-          artifiact-name: ${{ matrix.environment }}.spdx.json
+          artifact-name: ${{ matrix.environment }}.spdx.json
