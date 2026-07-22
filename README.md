@@ -22,19 +22,17 @@ The resolved dependency graph is recorded in [`pixi.lock`](pixi.lock).
 
 ## Workflow
 
-```text
-Pixi environment
-      |
-      v
-Syft -> SPDX JSON SBOM
-      |
-      +--> normalized package inventory
-      +--> Grype vulnerability scan
-      +--> Pixi lock/source mapping
-      +--> delegated specialist analysis
-      |
-      v
-Markdown risk reports
+```mermaid
+flowchart TD
+    A[Pixi environment] --> B[Syft -> SPDX JSON SBOM]
+    B --> C[normalized package inventory]
+    B --> D[Grype vulnerability scan]
+    B --> E[Pixi lock/source mapping]
+    B --> F[delegated specialist analysis]
+    C --> G[Markdown risk reports]
+    D --> G
+    E --> G
+    F --> G
 ```
 
 ### SBOM generation
