@@ -41,6 +41,8 @@ Recommended report set:
 
 ## Workflow
 
+Always use subagents or equivalent delegated/parallel agent workflows when the execution environment supports them. Prefer delegating independent analysis work even for moderately sized SBOMs; only do the work inline when delegation is unavailable, too small to justify, blocked by missing context, or the user explicitly asks not to use subagents.
+
 ### 1. Locate and inspect the SBOM
 
 Find SPDX JSON candidates if the user did not specify one:
@@ -96,9 +98,9 @@ If OSV Scanner supports the available SBOM format in the local version, use it t
 
 ### 4. Create specialized analysis reports
 
-For small SBOMs, write the reports directly. For large SBOMs or when the user asks for parallel work, spawn Herdr subagents. Use `/goal` inside each subagent prompt.
+Delegate the specialized reports below to subagents whenever possible. Adapt the delegation format to the current agent runtime: include a clear goal, required inputs, expected output file, analysis standards, and a request for a concise completion summary. Prefer `/goal` when the runtime supports goal-style prompts. If the runtime has a specific completion callback or handoff protocol, use it.
 
-Use the prompt templates in `references/subagent-goals.md`.
+Use the prompt templates in `references/subagent-goals.md` as reusable starting points, preserving `/goal` syntax when supported by the current agent.
 
 Recommended order:
 
