@@ -15,7 +15,7 @@ The repository combines:
 
 [`pixi.toml`](pixi.toml) defines two environments:
 
-- `openfe`, rooted at `openfe==1.11.1`
+- `openfe`, rooted at `openfe==1.12.0`
 - `openff`, rooted at `openff-toolkit==0.18.1`
 
 The resolved dependency graph is recorded in [`pixi.lock`](pixi.lock).
