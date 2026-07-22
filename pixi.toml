@@ -2,7 +2,7 @@
 authors = ["Ethan Holz <ethan.holz@omsf.io>"]
 channels = ["conda-forge"]
 name = "sbom-analysis"
-platforms = ["osx-arm64", "linux-64"]
+platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 version = "0.1.0"
 
 [tasks]
@@ -14,7 +14,7 @@ openfe = {features = ["openfe"]}
 openff = {features = ["openff"]}
 
 [feature.openfe.dependencies]
-openfe = "==1.11.1"
+openfe = "==1.12.0"
 
 [feature.openff.dependencies]
 openff-toolkit = "==0.18.1"
