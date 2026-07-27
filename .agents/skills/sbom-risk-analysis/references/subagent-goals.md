@@ -66,8 +66,10 @@ Deliverable:
 - <REPORTS_DIR>/vulnerability-risk.md
 
 Instructions:
-- Run available scanners such as grype against the SBOM. Save raw outputs under <REPORTS_DIR>.
-- Capture package, version, vulnerability ID, severity, fixed version if available, source database, and scanner confidence if available.
+- Before running Grype, run `grype db update`, then `grype db status -o json`; save the update log and status JSON under <REPORTS_DIR>.
+- Only scan if the update/status commands succeed and status reports a valid database. Never silently fall back to a stale cached database; if refresh fails, preserve logs and report Grype scanning as blocked.
+- Save raw scanner JSON, table output, and stderr under <REPORTS_DIR>. Inspect stderr for freshness warnings.
+- Capture the database refresh result, build timestamp, schema/version, and validity alongside package, version, vulnerability ID, severity, fixed version, source database, and scanner confidence if available.
 - Triage likely false positives, especially CPE-based matches.
 - Distinguish direct runtime risk, transitive risk, native/library risk, and likely scanner noise.
 - Produce a prioritized remediation table.

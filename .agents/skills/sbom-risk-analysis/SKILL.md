@@ -30,6 +30,7 @@ Recommended report set:
 - `reports/deduplication-analysis.md`
 - `reports/license-risk.md`
 - `reports/vulnerability-risk.md`
+- `reports/grype-db-update.log`, `reports/grype-db-status.json`, and raw Grype outputs when Grype is available
 - `reports/dependency-source-map.csv` if lock/manifest files are available
 - `reports/dependency-source-summary.md` if lock/manifest files are available
 - `reports/removal-candidates.md`
@@ -83,18 +84,48 @@ If the skill is installed globally, use its actual installed path for the script
 
 The CSV includes package identity, inferred ecosystem, license fields, purls, CPE counts, SPDX relationship counts, duplicate/multiple-version indicators, `NOASSERTION` flags, suspicious version flags, and source metadata.
 
-### 3. Run vulnerability scanning when available
+### 3. Refresh the vulnerability database and scan
 
-Prefer scanner-native SBOM input. Use what is installed; do not fail the whole workflow if scanners are unavailable.
+Prefer scanner-native SBOM input. Use what is installed; do not fail the whole analysis if scanners are unavailable.
 
-Common commands:
+Before every Grype scan, explicitly download the latest vulnerability database and save evidence of the refresh and resulting database status. A successful `grype db update` includes the case where the installed database is already current.
 
 ```bash
-grype path/to/sbom.spdx.json -o json > reports/grype-sbom.json
-grype path/to/sbom.spdx.json -o table > reports/grype-sbom.txt
+(
+  set -euo pipefail
+  mkdir -p reports
+
+  grype db update 2>&1 | tee reports/grype-db-update.log
+  grype db status -o json \
+    > reports/grype-db-status.json \
+    2> reports/grype-db-status.stderr.log
+
+  python3 - <<'PY'
+import json
+status = json.load(open('reports/grype-db-status.json'))
+if not status.get('valid'):
+    raise SystemExit('Grype vulnerability database is not valid')
+print('Grype DB:', status.get('schemaVersion'), status.get('built'))
+PY
+
+  grype path/to/sbom.spdx.json -o json \
+    > reports/grype-sbom.json \
+    2> reports/grype-sbom.stderr.log
+  grype path/to/sbom.spdx.json -o table \
+    > reports/grype-sbom.txt \
+    2>> reports/grype-sbom.stderr.log
+)
 ```
 
-If OSV Scanner supports the available SBOM format in the local version, use it too. Treat CPE-only findings as candidates for triage rather than verified exposure.
+Treat the database refresh and status commands as prerequisites, not best-effort decoration:
+
+- Only run the Grype scans if both commands succeed and `grype-db-status.json` reports a valid database.
+- If refresh or status validation fails, do not silently scan with the cached database. Mark Grype vulnerability scanning as blocked, preserve the logs, and continue non-vulnerability analysis.
+- Record the database build timestamp, schema/version, validity, and refresh result in `vulnerability-risk.md` and the final summary.
+- Inspect saved scanner stderr; do not infer that no freshness warning occurred merely because JSON/stdout lacks one.
+- Refresh again for release decisions or when re-running an older analysis package.
+
+If OSV Scanner supports the available SBOM format in the local version, use it too. Update any scanner-specific advisory data first when the tool supports an explicit update operation. Treat CPE-only findings as candidates for triage rather than verified exposure.
 
 ### 4. Create specialized analysis reports
 
@@ -122,6 +153,7 @@ Recommended order:
 Be evidence-based and cautious:
 
 - Distinguish confirmed risk from scanner or SBOM artifact noise.
+- Do not present Grype findings unless the database refresh/status prerequisite succeeded; otherwise report vulnerability scanning as blocked.
 - Do not claim a package is unused unless actual usage was checked.
 - Deduplicate package/version rows before summarizing counts.
 - Call out when Syft or SPDX metadata is incomplete, especially `NOASSERTION`, missing purls, missing suppliers, and generated CPE noise.
@@ -136,7 +168,7 @@ The final `reports/dependency-risk-summary.md` should include:
 - SBOM package count, unique name count, and unique name/version count
 - package manager/source mapping totals, if available
 - direct roots, if available
-- vulnerability posture and caveats
+- vulnerability posture and caveats, including scanner database refresh result, validity, and build timestamp
 - highest-priority license issues
 - provenance/metadata gaps
 - native/binary/platform concerns
