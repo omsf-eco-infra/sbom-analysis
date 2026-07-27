@@ -2,3 +2,6 @@
 .pixi/*
 !.pixi/config.toml
 **/__pycache__
+*.spdx.json
+reports/*
+.agents/skills/framejs/*
