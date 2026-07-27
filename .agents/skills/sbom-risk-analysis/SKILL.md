@@ -75,7 +75,7 @@ PY path/to/sbom.spdx.json
 Use the bundled dependency-free script from the skill directory. Resolve relative paths against the skill directory when invoking it.
 
 ```bash
-python3 .agents/skills/sbom-risk-analysis/scripts/spdx_package_inventory.py \
+python3 scripts/spdx_package_inventory.py \
   --input path/to/sbom.spdx.json \
   --output reports/package-inventory.csv
 ```
@@ -183,5 +183,5 @@ The final `reports/dependency-risk-summary.md` should include:
 
 ## Bundled files
 
-- `scripts/spdx_package_inventory.py` — dependency-free SPDX JSON to normalized CSV converter
+- `scripts/spdx_package_inventory.py` at the repository root — dependency-free SPDX JSON to normalized CSV converter
 - `references/subagent-goals.md` — reusable `/goal` prompts for Herdr subagents
