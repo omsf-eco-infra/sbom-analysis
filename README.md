@@ -43,44 +43,29 @@ GitHub Actions generates SBOMs on pushes to `main` for both environments. See [`
 
 The workflow scans `.pixi/envs/<environment>` with Syft and uses [`syft.yaml`](syft.yaml) to enable Conda and Cargo-auditable-binary catalogers. The resulting artifacts are named `openfe.spdx.json` and `openff.spdx.json`.
 
-To generate an SBOM locally with Syft:
-
-```sh
-syft .pixi/envs/openfe -o spdx-json=./openfe.spdx.json
-syft .pixi/envs/openff -o spdx-json=./openff.spdx.json
-```
-
-Use the repository configuration when needed:
-
-```sh
-syft .pixi/envs/openfe -c syft.yaml -o spdx-json=./openfe.spdx.json
-```
+SBOMs are generated only in CI, so the scanned environment matches the Linux user environment rather than the local macOS one. Download the `openfe.spdx.json` or `openff.spdx.json` artifact from the workflow run and place it in the repository root before running the analysis tasks.
 
 ### Inventory and scanner output
 
-Create a normalized inventory:
+Create a normalized inventory (downloads the SBOM artifact from CI first, or use a locally generated one):
 
 ```sh
-python3 scripts/spdx_package_inventory.py \
-  --input openfe.spdx.json \
-  --output reports/package-inventory.csv
+pixi run inventory openfe
 ```
 
 Run Grype and preserve its raw JSON output:
 
 ```sh
-grype openfe.spdx.json -o json > reports/grype-openfe.json
+pixi run grype-scan openfe
 ```
 
 Create the vulnerability triage report:
 
 ```sh
-python3 scripts/vulnerability_risk_report.py \
-  --grype-json reports/grype-openfe.json \
-  --inventory reports/package-inventory.csv \
-  --sbom openfe.spdx.json \
-  --output reports/vulnerability-risk.md
+pixi run vuln-report openfe
 ```
+
+Each task takes the environment name and expects `<env>.spdx.json` in the repository root, writing `reports/package-inventory.csv`, `reports/grype-<env>.json`, and `reports/vulnerability-risk.md`. The underlying scripts can also be run directly with `python3`.
 
 The scripts keep scanner findings auditable and flag common false-positive patterns such as CPE-only matches, duplicate package records, and wrong-ecosystem advisories.
 
@@ -92,12 +77,11 @@ The remaining reports are produced from the inventory, SBOM, lockfile, manifests
 - [`scripts/dependency_source_map.py`](scripts/dependency_source_map.py) — maps packages to Pixi roots and environments
 - Agent skill — license, provenance, native/binary, removal, environment split, risk model, and executive summary reviews
 
-Run deduplication analysis with:
+Run deduplication analysis and source mapping with:
 
 ```sh
-python3 scripts/deduplication_analysis.py \
-  --input reports/package-inventory.csv \
-  --output reports/deduplication-analysis.md
+pixi run dedup
+pixi run source-map
 ```
 
 The source mapping script reads `pixi.toml`, `pixi.lock`, and `reports/package-inventory.csv`, then writes:

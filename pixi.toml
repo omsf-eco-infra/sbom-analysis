@@ -6,8 +6,15 @@ platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 version = "0.1.0"
 
 [tasks]
+inventory = { cmd = "python3 scripts/spdx_package_inventory.py --input {{ env }}.spdx.json --output reports/package-inventory.csv", args = ["env"] }
+grype-scan = { cmd = "grype {{ env }}.spdx.json -o json > reports/grype-{{ env }}.json", args = ["env"] }
+vuln-report = { cmd = "python3 scripts/vulnerability_risk_report.py --grype-json reports/grype-{{ env }}.json --inventory reports/package-inventory.csv --sbom {{ env }}.spdx.json --output reports/vulnerability-risk.md", args = ["env"] }
+dedup = "python3 scripts/deduplication_analysis.py --input reports/package-inventory.csv --output reports/deduplication-analysis.md"
+source-map = "python3 scripts/dependency_source_map.py"
 
 [dependencies]
+python = ">=3.11"
+grype = "*"
 
 [environments]
 openfe = {features = ["openfe"]}
