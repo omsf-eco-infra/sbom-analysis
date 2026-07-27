@@ -4,6 +4,8 @@ A repeatable workflow for generating SPDX software bills of materials (SBOMs) fo
 
 The repository combines:
 
+> Interactive visualizations require [FrameJS](https://framejs.io/) to be installed.
+
 - **Pixi** for reproducible `openfe` and `openff` environments
 - **Syft** for SPDX SBOM generation
 - **Grype** for vulnerability scanning
