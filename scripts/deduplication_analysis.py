@@ -93,13 +93,13 @@ def markdown_escape(value: str) -> str:
 def version_list(records: list[dict[str, str]]) -> str:
     versions = sorted(
         {record["version"] if record["version"] else "<blank>" for record in records},
-        key=str.lower,
+        key=lambda value: (value.lower(), value),
     )
     return ", ".join(f"`{markdown_escape(version)}`" for version in versions)
 
 
 def ecosystem_list(records: list[dict[str, str]]) -> str:
-    ecosystems = sorted({record["ecosystem"] for record in records}, key=str.lower)
+    ecosystems = sorted({record["ecosystem"] for record in records})
     return ", ".join(f"`{markdown_escape(ecosystem)}`" for ecosystem in ecosystems)
 
 
@@ -152,53 +152,40 @@ def classify(
 
     if has_suspicious_version and has_multiple_versions:
         return (
-            "Suspicious version plus another recorded version; likely cleanup "
-            "candidate / stale installed metadata rather than intentional coexistence."
+            "Suspicious version plus another recorded version; inspect metadata "
+            "and installation locations before deciding whether cleanup is needed."
         )
     if has_suspicious_version:
-        if any("/site-packages/setuptools/" in record.get("source_info", "") for record in records):
-            return (
-                "Suspicious `UNKNOWN` executable version from bundled setuptools "
-                "launcher binary; bundled binary/package artifact."
-            )
-        if name.startswith(".pixi/"):
-            return (
-                "Document-root directory record with blank version; normal Syft "
-                "directory/package boundary artifact."
-            )
         return "Suspicious version metadata; cleanup candidate."
     if name in format_duplicate_names:
         return (
-            "Likely version-format duplicate (trailing `.0` normalization); conda + "
-            "PyPI duplicate, not clear separate installed versions."
+            "Likely version-format duplicate (trailing `.0` normalization); "
+            "confirm package identity before merging records."
         )
     if has_multiple_versions:
         return (
-            "Actual simultaneous multiple versions recorded across ecosystems; verify "
+            "Multiple versions recorded; verify "
             "environment resolution and import path precedence."
         )
     if has_exact_duplicate:
         if ecosystems == {"conda", "pypi"}:
             return (
-                "Normal Syft duplication from conda package metadata plus installed "
-                "Python distribution metadata."
+                "Possible conda/PyPI metadata overlap; confirm source records."
             )
         if ecosystems == {"conda", "generic"}:
             return (
-                "Bundled binary/package artifact: executable/library detected "
-                "separately from the conda package record."
+                "Possible binary/package overlap; confirm source records."
             )
         if ecosystems == {"python"}:
             return (
-                "Bundled binary/package artifact: multiple architecture-specific "
-                "launcher executables share one product/version."
+                "Repeated Python records; inspect locations before deduplicating."
             )
         return "Exact duplicate name/version records across ecosystems; review scanner source records."
     return "No deduplication concern."
 
 
 def followup(concern: str) -> str:
-    if "Normal Syft duplication" in concern:
+    if "metadata overlap" in concern:
         return (
             "Deduplicate in reporting by preferring one package identity per `name` + "
             "`version`; keep both source references if traceability is needed."
@@ -208,7 +195,7 @@ def followup(concern: str) -> str:
             "Normalize semantic versions for comparison (`1.12` == `1.12.0`) and "
             "confirm both records point to the same installed package."
         )
-    if "Actual simultaneous" in concern:
+    if "Multiple versions recorded" in concern:
         return (
             "Check lockfile/conda metadata and Python dist-info; decide whether both "
             "versions are expected, then document or remove stale metadata."
@@ -218,24 +205,12 @@ def followup(concern: str) -> str:
             "Inspect the PyPI `.dist-info` direct URL/metadata and reinstall or clean "
             "stale editable/local metadata if the conda version is authoritative."
         )
-    if "setuptools launcher" in concern:
-        return (
-            "Treat as bundled executable metadata; optionally suppress binary "
-            "pseudo-packages from package inventory totals."
-        )
-    if "Document-root directory" in concern:
-        return "Exclude document-root directory records from package deduplication metrics."
     if "Suspicious version metadata" in concern:
         return "Inspect source metadata and replace with a real release/version if it is a first-party package."
-    if "Bundled binary/package artifact" in concern:
-        return (
-            "Keep as evidence of bundled executable artifact, but avoid counting it as "
-            "an additional installed package."
-        )
     return "Review manually."
 
 
-def build_report(records: list[dict[str, str]]) -> str:
+def build_report(records: list[dict[str, str]], source: str = "not supplied") -> str:
     by_name, by_name_version = build_indexes(records)
     exact_duplicates = {
         key: duplicates
@@ -258,7 +233,7 @@ def build_report(records: list[dict[str, str]]) -> str:
         {name for name, _version in exact_duplicates}
         | set(multiple_version_names)
         | suspicious_names,
-        key=str.lower,
+        key=lambda value: (value.lower(), value),
     )
 
     exact_conda_pypi = sum(
@@ -286,7 +261,7 @@ def build_report(records: list[dict[str, str]]) -> str:
     lines = [
         "# Package deduplication analysis",
         "",
-        "Source: `reports/package-inventory.csv`.",
+        f"Source: `{markdown_escape(source)}`.",
         "",
         "## Summary",
         "",
@@ -295,7 +270,7 @@ def build_report(records: list[dict[str, str]]) -> str:
         f"- Exact duplicate `name` + `version` groups: **{len(exact_duplicates)}**",
         f"  - `conda` + `pypi` metadata overlaps: **{exact_conda_pypi}**",
         f"  - `conda` + `generic` binary/package overlaps: **{exact_conda_generic}**",
-        f"  - Python bundled launcher duplicate group(s): **{exact_python}**",
+        f"  - Python-only duplicate group(s): **{exact_python}**",
         f"- Package names with multiple versions: **{len(multiple_version_names)}**",
         f"- Likely version-format duplicate package names: **{len(format_duplicate_names)}**",
         f"- Suspicious-version records: **{suspicious_record_count}** across **{len(suspicious_names)}** package names",
@@ -306,9 +281,8 @@ def build_report(records: list[dict[str, str]]) -> str:
         "",
         "## Interpretation",
         "",
-        "- Most exact duplicate records are expected Syft behavior in this environment: Syft sees both conda metadata and Python package metadata for the same installed distribution.",
-        "- `conda` + `generic` duplicates are executable or library artifacts such as `/bin/python3.13`, `/bin/openssl`, `/bin/jq`, and `/bin/zstd` that are also represented by conda package metadata.",
-        "- Suspicious `UNKNOWN` launcher records come from bundled Windows executable launchers inside `setuptools`; the repeated `Simple Launcher` records come from architecture-specific launcher binaries vendored under `pip/_vendor/distlib`.",
+        "- Duplicate names and versions are review signals, not proof that records represent the same installed artifact.",
+        "- Ecosystem overlaps may reflect multiple catalogers; confirm locations and package identities before deduplicating.",
         "- Multi-version rows are higher-priority follow-up items because they can indicate actual version skew, stale `.dist-info` metadata, or formatting-only version differences.",
         "",
         "## Findings",
@@ -327,7 +301,7 @@ def build_report(records: list[dict[str, str]]) -> str:
         )
 
     lines.extend(["", "## Higher-priority follow-up", ""])
-    for name in sorted(set(multiple_version_names) | suspicious_names, key=str.lower):
+    for name in sorted(set(multiple_version_names) | suspicious_names, key=lambda value: (value.lower(), value)):
         package_records = by_name[name]
         concern = classify(name, package_records, by_name_version, format_duplicate_names)
         lines.append(f"- `{markdown_escape(name)}` ({version_list(package_records)}): {markdown_escape(concern)}")
@@ -337,11 +311,11 @@ def build_report(records: list[dict[str, str]]) -> str:
             "",
             "## Deduplication recommendations",
             "",
-            "1. For routine inventory counts, collapse exact duplicate `name` + `version` records when the ecosystems are `conda` + `pypi`; retain both source references if provenance matters.",
-            "2. Do not treat `conda` + `generic` binary overlaps as separate application dependencies unless binary-level artifact tracking is explicitly required.",
-            "3. Suppress or separately bucket bundled launcher pseudo-packages (`Simple Launcher`, `cli*`, `gui*`) so they do not inflate package counts.",
+            "1. Collapse exact duplicate records only after confirming package identity and installation location; retain source references.",
+            "2. Review `conda` + `generic` overlaps for bundled binaries before adjusting application dependency counts.",
+            "3. Separately bucket bundled artifacts only after confirming their source locations; do not suppress by package name alone.",
             "4. Normalize semver-like versions before comparing packages, especially trailing-zero variants such as `1.12` and `1.12.0`.",
-            "5. Manually inspect multi-version and suspicious-version packages before cleanup; several look like stale or locally generated Python `.dist-info` metadata next to authoritative conda packages.",
+            "5. Manually inspect multi-version and suspicious-version packages before cleanup; stale metadata is only one possible explanation.",
         ]
     )
 
@@ -357,7 +331,7 @@ def main() -> None:
         records = list(csv.DictReader(f))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(build_report(records), encoding="utf-8")
+    output_path.write_text(build_report(records, args.input), encoding="utf-8")
     print(f"Wrote {output_path}")
 
 

@@ -35,8 +35,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input",
         "-i",
-        default="openfe.spdx.json",
-        help="Input SPDX JSON file. Default: openfe.spdx.json",
+        required=True,
+        help="Input SPDX JSON file.",
     )
     parser.add_argument(
         "--output",
@@ -120,6 +120,9 @@ def build_relationship_counts(relationships: list[dict[str, Any]]) -> dict[str, 
             # SPDX: A DEPENDENCY_OF B means A is a dependency of B.
             counts[left]["dependent_count"] += 1
             counts[right]["dependency_count"] += 1
+        elif relationship_type == "DEPENDS_ON" and right:
+            counts[left]["dependency_count"] += 1
+            counts[right]["dependent_count"] += 1
 
     return counts
 

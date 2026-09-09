@@ -10,7 +10,7 @@ The repository combines:
 - **Syft** for SPDX SBOM generation
 - **Grype** for vulnerability scanning
 - Optional **OSV-Scanner** coverage
-- Small dependency-free Python scripts for normalization and triage
+- Small Python scripts for normalization and triage (source mapping uses PyYAML)
 - An agent skill for delegated license, provenance, native dependency, removal, and environment-split analysis
 
 ## Environments
@@ -67,7 +67,7 @@ pixi run vuln-report openfe
 
 Each task takes the environment name and expects `<env>.spdx.json` in the repository root, writing `reports/package-inventory.csv`, `reports/grype-<env>.json`, and `reports/vulnerability-risk.md`. The underlying scripts can also be run directly with `python3`.
 
-The scripts keep scanner findings auditable and flag common false-positive patterns such as CPE-only matches, duplicate package records, and wrong-ecosystem advisories.
+The scripts retain scanner findings and flag CPE matches and incomplete package identities for review, without package-specific suppressions. See [`scripts/README.md`](scripts/README.md) for a locked, environment-separated workflow and reproduction limits.
 
 ### Additional analysis
 
@@ -81,7 +81,7 @@ Run deduplication analysis and source mapping with:
 
 ```sh
 pixi run dedup
-pixi run source-map
+pixi run --locked source-map openfe linux-64
 ```
 
 The source mapping script reads `pixi.toml`, `pixi.lock`, and `reports/package-inventory.csv`, then writes:

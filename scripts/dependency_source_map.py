@@ -3,19 +3,26 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
+
+import yaml
 import re
 import tomllib
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 from urllib.parse import urlparse
 
-ROOT = Path(__file__).resolve().parents[1]
-PIXI_TOML = ROOT / "pixi.toml"
-PIXI_LOCK = ROOT / "pixi.lock"
-INVENTORY = ROOT / "reports" / "package-inventory.csv"
-OUT_CSV = ROOT / "reports" / "dependency-source-map.csv"
-OUT_MD = ROOT / "reports" / "dependency-source-summary.md"
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, default=Path("pixi.toml"))
+    parser.add_argument("--lock", type=Path, default=Path("pixi.lock"))
+    parser.add_argument("--inventory", type=Path, default=Path("reports/package-inventory.csv"))
+    parser.add_argument("--output", type=Path, default=Path("reports/dependency-source-map.csv"))
+    parser.add_argument("--summary", type=Path, default=Path("reports/dependency-source-summary.md"))
+    parser.add_argument("--platform", required=True, help="Locked platform of the scanned environment.")
+    parser.add_argument("--environment", required=True, help="Locked environment to analyze.")
+    return parser.parse_args()
 
 
 def norm(name: str) -> str:
@@ -35,82 +42,59 @@ def package_from_conda_url(url: str) -> tuple[str, str, str]:
 
 
 def dep_name(spec: str) -> str:
-    return re.split(r"[\s<>=!~]", spec.strip(), maxsplit=1)[0]
+    return re.split(r"[\s<>=!~]", spec.strip().rsplit("::", 1)[-1], maxsplit=1)[0]
 
 
-def parse_pixi_toml() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-    data = tomllib.loads(PIXI_TOML.read_text())
+def parse_pixi_toml(path: Path, platform: str) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    def dependencies(content):
+        if content.get("pypi-dependencies"):
+            raise ValueError("Source mapping currently supports conda dependencies only")
+        deps = list(content.get("dependencies", {}))
+        for selector, target in content.get("target", {}).items():
+            if target.get("pypi-dependencies"):
+                raise ValueError("Source mapping currently supports conda dependencies only")
+            if selector == platform or selector == platform.split("-", 1)[0] or (selector == "unix" and not platform.startswith("win-")):
+                deps.extend(target.get("dependencies", {}))
+        return deps
     feature_deps = {
-        feature: list((content.get("dependencies") or {}).keys())
+        feature: dependencies(content)
         for feature, content in (data.get("feature") or {}).items()
     }
     env_roots: dict[str, list[str]] = {}
+    default_deps = dependencies(data)
     for env, content in (data.get("environments") or {}).items():
-        roots: list[str] = []
+        if isinstance(content, list):
+            content = {"features": content}
+        roots = [] if content.get("no-default-feature", False) else list(default_deps)
         for feature in content.get("features", []):
-            roots.extend(feature_deps.get(feature, []))
-        env_roots[env] = roots
-    if data.get("dependencies"):
-        env_roots.setdefault("default", []).extend(data["dependencies"].keys())
+            roots.extend(feature_deps[feature])
+        env_roots[env] = sorted(set(roots))
+    env_roots.setdefault("default", sorted(set(default_deps)))
     return feature_deps, env_roots
 
 
-def parse_pixi_lock() -> tuple[dict[str, set[str]], dict[str, dict[str, set[str]]]]:
-    env_packages: dict[str, set[str]] = defaultdict(set)
+def parse_pixi_lock(path: Path, environment: str, platform: str) -> tuple[dict[str, set[str]], dict[str, dict[str, set[str]]]]:
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if data.get("version") != 7:
+        raise ValueError("Source mapping supports Pixi lock version 7")
+    environments = data["environments"]
+    if environment not in environments or platform not in environments[environment]["packages"]:
+        raise ValueError(f"No locked environment/platform: {environment}/{platform}")
+    entries = environments[environment]["packages"][platform]
+    if any("pypi" in entry for entry in entries):
+        raise ValueError("Source mapping currently supports conda lock entries only")
+    selected = {entry["conda"] for entry in entries}
+    metadata = {entry["conda"]: entry for entry in data["packages"] if "conda" in entry}
     packages: dict[str, dict[str, set[str]]] = defaultdict(lambda: {"names": set(), "versions": set(), "deps": set()})
-
-    current_env = None
-    in_top_envs = False
-    in_packages = False
-    current_pkg_norm = None
-    in_depends = False
-
-    for raw in PIXI_LOCK.read_text().splitlines():
-        line = raw.rstrip("\n")
-
-        if line == "environments:":
-            in_top_envs = True
-            continue
-        if line == "packages:":
-            in_top_envs = False
-            in_packages = True
-            current_env = None
-            continue
-
-        if in_top_envs:
-            m_env = re.match(r"^  ([A-Za-z0-9_.-]+):$", line)
-            if m_env:
-                current_env = m_env.group(1)
-                continue
-            m_conda = re.match(r"^      - conda: (\S+)$", line)
-            if m_conda and current_env:
-                name, _version, _build = package_from_conda_url(m_conda.group(1))
-                env_packages[current_env].add(norm(name))
-            continue
-
-        if in_packages:
-            m_pkg = re.match(r"^- conda: (\S+)$", line)
-            if m_pkg:
-                name, version, _build = package_from_conda_url(m_pkg.group(1))
-                current_pkg_norm = norm(name)
-                packages[current_pkg_norm]["names"].add(name)
-                packages[current_pkg_norm]["versions"].add(version)
-                in_depends = False
-                continue
-            if current_pkg_norm is None:
-                continue
-            if line == "  depends:":
-                in_depends = True
-                continue
-            if re.match(r"^  [A-Za-z_].*:$", line):
-                in_depends = False
-                continue
-            if in_depends:
-                m_dep = re.match(r"^  - (.+)$", line)
-                if m_dep:
-                    packages[current_pkg_norm]["deps"].add(norm(dep_name(m_dep.group(1))))
-
-    return env_packages, packages
+    for url in sorted(selected):
+        entry = metadata[url]
+        name, version, _build = package_from_conda_url(url)
+        package = packages[norm(name)]
+        package["names"].add(name)
+        package["versions"].add(version)
+        package["deps"].update(norm(dep_name(dep)) for dep in entry.get("depends", []))
+    return {environment: set(packages)}, packages
 
 
 def compute_sources(env_roots: dict[str, list[str]], packages: dict[str, dict[str, set[str]]]) -> dict[str, set[str]]:
@@ -133,7 +117,7 @@ def compute_sources(env_roots: dict[str, list[str]], packages: dict[str, dict[st
 
 
 def environment_for(pkg: str, env_packages: dict[str, set[str]]) -> str:
-    envs = sorted(env for env, packages in env_packages.items() if pkg in packages and env != "default")
+    envs = sorted(env for env, packages in env_packages.items() if pkg in packages)
     if len(envs) > 1:
         return "shared"
     if len(envs) == 1:
@@ -142,12 +126,15 @@ def environment_for(pkg: str, env_packages: dict[str, set[str]]) -> str:
 
 
 def main() -> None:
-    _feature_deps, env_roots = parse_pixi_toml()
+    args = parse_args()
+    _feature_deps, all_roots = parse_pixi_toml(args.manifest, args.platform)
+    env_roots = {args.environment: all_roots[args.environment]}
     direct = {norm(dep): dep for deps in env_roots.values() for dep in deps}
-    env_packages, lock_packages = parse_pixi_lock()
+    env_packages, lock_packages = parse_pixi_lock(args.lock, args.environment, args.platform)
     source_roots = compute_sources(env_roots, lock_packages)
 
-    rows = list(csv.DictReader(INVENTORY.open()))
+    with args.inventory.open(encoding="utf-8", newline="") as handle:
+        rows = sorted(csv.DictReader(handle), key=lambda row: tuple(sorted(row.items())))
     out_rows = []
     counters = Counter()
     unknown_rows = []
@@ -160,7 +147,7 @@ def main() -> None:
         pkg_n = norm(name)
         lock_info = lock_packages.get(pkg_n)
         found = lock_info is not None
-        version_match = found and (not version or version in lock_info["versions"])
+        version_match = found and version in lock_info["versions"]
 
         if pkg_n in direct:
             relationship = "direct"
@@ -202,8 +189,10 @@ def main() -> None:
         counters[("found" if found else "missing",)] += 1
         out_rows.append(out)
 
-    with OUT_CSV.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(out_rows[0]))
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.summary.parent.mkdir(parents=True, exist_ok=True)
+    with args.output.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["package", "version", "ecosystem", "relationship", "root_dependency", "environment", "pixi_lock_match", "pixi_lock_versions", "notes"])
         writer.writeheader()
         writer.writerows(out_rows)
 
@@ -224,7 +213,7 @@ def main() -> None:
 
     md = []
     md.append("# Dependency source map summary\n")
-    md.append("Generated from `reports/package-inventory.csv`, `pixi.toml`, and `pixi.lock`. Package matching normalizes case and treats `-`, `_`, and `.` as equivalent.\n")
+    md.append(f"Generated from `{args.inventory}`, `{args.manifest}`, and `{args.lock}` for `{args.environment}/{args.platform}`. Package matching normalizes case and treats `-`, `_`, and `.` as equivalent. Name matches are heuristic, not proof of artifact identity.\n")
     md.append("## Totals\n")
     md.append(f"- SBOM package records: {total}")
     md.append(f"- Matched to Pixi lock metadata: {found}")
@@ -248,11 +237,11 @@ def main() -> None:
         md.append("- No version mismatches were found for matched package names.")
     md.append(f"- {pypi_mapped} PyPI SBOM records mapped back to locked conda packages by normalized name; these are usually Python distribution metadata emitted from conda-installed packages, not standalone Pixi PyPI dependencies.")
     md.append("- Vendored Python distributions under packages such as `setuptools/_vendor` commonly appear in the SBOM but are not separate Pixi lock entries; these remain `unknown` in the CSV.")
-    md.append("- The SBOM appears to describe `.pixi/envs/openfe`, while `pixi.lock` contains both `openfe` and `openff`; packages present in both locked environments are marked `shared`.\n")
+    md.append("- Mapping is restricted to the requested environment/platform; this selection is supplied by the caller, not inferred from the SBOM.\n")
     md.append("## Output\n")
-    md.append("See `reports/dependency-source-map.csv` for per-record source classification, root dependency, environment, lock match status, and notes.\n")
+    md.append(f"See `{args.output}` for per-record source classification, root dependency, environment, lock match status, and notes.\n")
 
-    OUT_MD.write_text("\n".join(md))
+    args.summary.write_text("\n".join(md), encoding="utf-8")
 
 
 if __name__ == "__main__":

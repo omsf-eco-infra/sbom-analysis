@@ -10,11 +10,12 @@ inventory = { cmd = "python3 scripts/spdx_package_inventory.py --input {{ env }}
 grype-scan = { cmd = "grype {{ env }}.spdx.json -o json > reports/grype-{{ env }}.json", args = ["env"] }
 vuln-report = { cmd = "python3 scripts/vulnerability_risk_report.py --grype-json reports/grype-{{ env }}.json --inventory reports/package-inventory.csv --sbom {{ env }}.spdx.json --output reports/vulnerability-risk.md", args = ["env"] }
 dedup = "python3 scripts/deduplication_analysis.py --input reports/package-inventory.csv --output reports/deduplication-analysis.md"
-source-map = "python3 scripts/dependency_source_map.py"
+source-map = { cmd = "python3 scripts/dependency_source_map.py --environment {{ env }} --platform {{ platform }}", args = ["env", "platform"] }
 
 [dependencies]
 python = ">=3.11"
 grype = "*"
+pyyaml = ">=6,<7"
 
 [environments]
 openfe = {features = ["openfe"]}
