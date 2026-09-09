@@ -5,3 +5,4 @@
 *.spdx.json
 reports/*
 .agents/skills/framejs/*
+.agents/skills/omsf-pdf-skill/*

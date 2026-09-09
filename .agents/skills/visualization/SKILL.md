@@ -1,13 +1,13 @@
 ---
 name: visualization
-description: Create or improve interactive, evidence-rich visualizations and dashboards for analysis findings. Use for project health, dependency, security, license, provenance, risk, compliance, scientific, or operational reports where users need summary context, explanatory text, sensible defaults, drill-downs, and links to source evidence. Pair with the framejs skill when publishing a browser visualization.
+description: Create or improve interactive, evidence-rich visualizations and dashboards for analysis findings. Use for project health, dependency, security, license, provenance, risk, compliance, scientific, or operational reports where users need summary context, explanatory text, sensible defaults, drill-downs, and links to source evidence. Pair with the framejs skill when publishing a browser visualization, or the omsf-pdf skill (https://github.com/omsf-eco-infra/omsf-pdf-skill) for a PDF report when framejs is unavailable.
 ---
 
 # Visualization
 
 Create visualizations that explain findings rather than merely displaying metrics.
 
-When `framejs` is available and the user wants a shareable browser visualization, load that skill and follow its publishing, input, update, and lifecycle rules. This skill defines the product and information-design preferences; do not duplicate FrameJS mechanics here.
+When `framejs` is available and the user wants a shareable browser visualization, load that skill and follow its publishing, input, update, and lifecycle rules. When `framejs` is not available, use the `omsf-pdf` skill at https://github.com/omsf-eco-infra/omsf-pdf-skill instead (clone it to a temp dir on demand, do not vendor it) and deliver the same findings as a PDF report following its schema and render workflow. This skill defines the product and information-design preferences; do not duplicate FrameJS or OMSF PDF mechanics here.
 
 ## Core standard
 
@@ -124,9 +124,9 @@ When modifying an existing visualization:
 1. Fetch and inspect its current code and inputs first.
 2. Preserve its stable URL, inputs, modules, and Open Graph metadata unless the request changes them.
 3. Make the smallest coherent update.
-4. Re-run syntax checks and assert that required handlers, inputs, defaults, and links remain present.
+4. Re-run syntax checks (framejs route) or a successful PDF render (omsf-pdf route) and assert that required handlers, inputs, defaults, and links remain present.
 5. Verify the key displayed counts against source data.
-6. Report the live URL and relevant link-lifecycle caveat.
+6. Report the live URL and relevant link-lifecycle caveat (framejs route), or the PDF's absolute path (omsf-pdf route).
 
 Do not declare completion after a failed patch or syntax check. Fix and revalidate first.
 
@@ -143,5 +143,5 @@ Before publishing, confirm:
 - false positives and uncertainty are visible;
 - counts match source data;
 - desktop and mobile layouts are usable;
-- browser JavaScript passes a syntax check;
+- browser JavaScript passes a syntax check (framejs route), or the PDF renders cleanly (omsf-pdf route);
 - the visualization update preserves the existing live URL when applicable.
