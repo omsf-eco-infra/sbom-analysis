@@ -135,3 +135,12 @@ Scanner output is evidence for triage, not proof that a vulnerability is exploit
 - The intended license and redistribution model
 
 Do not claim a package is unused without checking actual project usage or dependency paths.
+
+## Acknowledgements
+
+This work was supported by the US National Science Foundation under [Grant No.
+2303740](https://nsf.elsevierpure.com/en/projects/pose-phase-ii-building-open-source-ecosystems-in-molecular-scienc-2/).
+<br>
+<br>
+<img width="100" alt="NSF_Official_logo_High_Res_1200ppi.jpeg"
+src="https://nsf.widen.net/content/txvhzmsofh/jpeg/NSF_Official_logo_High_Res_1200ppi.jpeg?w=640&keep=c&crop=yes&quality=80&x.portal_shortcode_generated=dnmqqhzz&x.collection_sharename=wc3fwkos&x.app=portals">
